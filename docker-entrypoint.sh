@@ -1,5 +1,35 @@
 #!/bin/bash
 
+#
+# IMPORTANT
+#
+# We manually override `user.home` here because we suddently have a
+# catastrophic problem where the Java runtime was no longer able to find a
+# value for `user.home`, which failed start up on Heroku. It's unclear as to
+# exactly why (it seems likely due to an underlying change on the Heroku
+# platform), but we're able to fix the problem by hard-injecting a value for
+# `user.home`.
+#
+# I tried a number of methods to fix this, but using `JAVA_OPTS` is the one
+# that ended up working. Java doesn't seem to respect `HOME` if we export it.
+# We can inject `-Duser.home=` to the program at the bottom of this file and it
+# fixes that one program, but the file also boots a cluster of ancillary
+# services from subscripts which then don't get a `user.home` value. Exporting
+# it to `JAVA_OPTS` lets the main program and all ancillary programs get it.
+#
+
+# This group of lines copied from `bin/standalone.conf` in Keycloak because
+# Keycloak won't set any of them if we override `JAVA_OPTS` at all.
+if [ "x$JBOSS_MODULES_SYSTEM_PKGS" = "x" ]; then
+   JBOSS_MODULES_SYSTEM_PKGS="org.jboss.byteman"
+fi
+JAVA_OPTS="-Xms64m -Xmx512m -XX:MetaspaceSize=96M -XX:MaxMetaspaceSize=256m -Djava.net.preferIPv4Stack=true"
+JAVA_OPTS="$JAVA_OPTS -Djboss.modules.system.pkgs=$JBOSS_MODULES_SYSTEM_PKGS -Djava.awt.headless=true"
+
+# Here's the added line.
+export JAVA_OPTS="$JAVA_OPTS -Duser.home=/opt/jboss"
+
+
 # Set database config from Heroku DATABASE_URL
 if [ "$DATABASE_URL" != "" ]; then
     echo "Found database configuration in DATABASE_URL=$DATABASE_URL"
